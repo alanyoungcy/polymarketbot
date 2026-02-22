@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package polybot.v1;
+
+option go_package = "github.com/alanyoungcy/polymarketbot/internal/pb/polybot/v1;polybotv1";
+
+import "google/protobuf/timestamp.proto";
+
+// OrderSide indicates whether an order is buying or selling.
+enum OrderSide {
+  ORDER_SIDE_UNSPECIFIED = 0;
+  ORDER_SIDE_BUY = 1;
+  ORDER_SIDE_SELL = 2;
+}
+
+// OrderType defines the time-in-force / execution semantics of an order.
+enum OrderType {
+  ORDER_TYPE_UNSPECIFIED = 0;
+  // Good-Til-Cancelled: rests on the book until filled or cancelled.
+  ORDER_TYPE_GTC = 1;
+  // Good-Til-Date: rests on the book until a specified expiry.
+  ORDER_TYPE_GTD = 2;
+  // Fill-Or-Kill: must fill entirely or is cancelled immediately.
+  ORDER_TYPE_FOK = 3;
+  // Fill-And-Kill (Immediate-Or-Cancel): fills what it can, cancels the rest.
+  ORDER_TYPE_FAK = 4;
+}
+
+// OrderStatus tracks the lifecycle of an order.
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  // Order has been submitted but not yet acknowledged.
+  ORDER_STATUS_PENDING = 1;
+  // Order is resting on the order book.
+  ORDER_STATUS_OPEN = 2;
+  // Order has been fully matched/filled.
+  ORDER_STATUS_MATCHED = 3;
+  // Order was cancelled by the user or system.
+  ORDER_STATUS_CANCELLED = 4;
+  // Order submission failed.
+  ORDER_STATUS_FAILED = 5;
+}
+
+// Order represents a CLOB order on Polymarket.
+message Order {
+  // Unique order identifier.
+  string id = 1;
+
+  // Market this order belongs to.
+  string market_id = 2;
+
+  // CLOB token ID for the specific outcome.
+  string token_id = 3;
+
+  // Wallet address that placed the order.
+  string wallet = 4;
+
+  // Buy or sell.
+  OrderSide side = 5;
+
+  // Time-in-force type.
+  OrderType type = 6;
+
+  // Price in tick units (raw CLOB representation).
+  int64 price_ticks = 7;
+
+  // Size in unit representation (raw CLOB representation).
+  int64 size_units = 8;
+
+  // How much of the order has been filled (display units).
+  double filled_size = 9;
+
+  // Current lifecycle status.
+  OrderStatus status = 10;
+
+  // EIP-712 typed-data signature authorizing the order.
+  string signature = 11;
+
+  // Name of the strategy that generated this order.
+  string strategy = 12;
+
+  // When the order was created.
+  google.protobuf.Timestamp created_at = 13;
+
+  // When the order was last updated.
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+// OrderResult is returned after submitting or cancelling an order.
+message OrderResult {
+  // Whether the operation succeeded.
+  bool success = 1;
+
+  // The order ID (set on success).
+  string order_id = 2;
+
+  // Status of the order after the operation.
+  OrderStatus status = 3;
+
+  // Human-readable message (especially useful on failure).
+  string message = 4;
+
+  // Hint for the caller: should this operation be retried?
+  bool should_retry = 5;
+}

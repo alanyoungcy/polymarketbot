@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package polybot.v1;
+
+option go_package = "github.com/alanyoungcy/polymarketbot/internal/pb/polybot/v1;polybotv1";
+
+import "google/protobuf/timestamp.proto";
+
+// PipelineStatus reports the progress of a data ingestion or processing pipeline.
+message PipelineStatus {
+  // Name of the pipeline step (e.g. "market_sync", "trade_ingest").
+  string step = 1;
+
+  // Progress percentage (0-100).
+  double progress_pct = 2;
+
+  // Number of records processed so far.
+  int64 records_processed = 3;
+
+  // Cursor for resuming (e.g. last processed ID or timestamp).
+  string last_cursor = 4;
+
+  // Whether the pipeline is currently running.
+  bool is_running = 5;
+
+  // When the pipeline started.
+  google.protobuf.Timestamp started_at = 6;
+
+  // When this status was last updated.
+  google.protobuf.Timestamp updated_at = 7;
+}

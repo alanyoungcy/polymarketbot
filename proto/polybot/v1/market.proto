@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package polybot.v1;
+
+option go_package = "github.com/alanyoungcy/polymarketbot/internal/pb/polybot/v1;polybotv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Market represents a Polymarket prediction market.
+message Market {
+  // Unique market identifier from Polymarket.
+  string id = 1;
+
+  // The question the market is asking.
+  string question = 2;
+
+  // URL-friendly slug for the market.
+  string slug = 3;
+
+  // Label for the first outcome (e.g. "Yes").
+  string outcome_1 = 4;
+
+  // Label for the second outcome (e.g. "No").
+  string outcome_2 = 5;
+
+  // CLOB token ID for the first outcome.
+  string token_id_1 = 6;
+
+  // CLOB token ID for the second outcome.
+  string token_id_2 = 7;
+
+  // CTF condition ID used for on-chain settlement.
+  string condition_id = 8;
+
+  // Whether this market uses neg-risk framework.
+  bool neg_risk = 9;
+
+  // Total volume traded in USDC.
+  double volume = 10;
+
+  // Current market status (e.g. "active", "closed").
+  string status = 11;
+
+  // When the market closed (may be unset for active markets).
+  google.protobuf.Timestamp closed_at = 12;
+
+  // When the market was created.
+  google.protobuf.Timestamp created_at = 13;
+}

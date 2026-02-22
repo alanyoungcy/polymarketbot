@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package polybot.v1;
+
+option go_package = "github.com/alanyoungcy/polymarketbot/internal/pb/polybot/v1;polybotv1";
+
+import "google/protobuf/timestamp.proto";
+
+// PriceLevel represents a single price/size pair in the order book.
+message PriceLevel {
+  // Price in decimal form (e.g. 0.55 = 55 cents).
+  double price = 1;
+
+  // Size available at this price level.
+  double size = 2;
+}
+
+// OrderbookSnapshot is a full snapshot of the order book for a given asset.
+message OrderbookSnapshot {
+  // The CLOB token asset ID.
+  string asset_id = 1;
+
+  // All bid (buy) price levels, sorted best-to-worst.
+  repeated PriceLevel bids = 2;
+
+  // All ask (sell) price levels, sorted best-to-worst.
+  repeated PriceLevel asks = 3;
+
+  // Highest bid price.
+  double best_bid = 4;
+
+  // Lowest ask price.
+  double best_ask = 5;
+
+  // Midpoint between best bid and best ask.
+  double mid_price = 6;
+
+  // When this snapshot was captured.
+  google.protobuf.Timestamp timestamp = 7;
+}
+
+// PriceChange represents a single order book update from the WebSocket feed.
+message PriceChange {
+  // The CLOB token asset ID.
+  string asset_id = 1;
+
+  // Which side changed ("BUY" or "SELL").
+  string side = 2;
+
+  // The price level that changed.
+  double price = 3;
+
+  // New size at this price level (0 means removed).
+  double size = 4;
+
+  // When the change occurred.
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+// LastTradePrice represents the most recent trade for an asset.
+message LastTradePrice {
+  // The CLOB token asset ID.
+  string asset_id = 1;
+
+  // Price of the last trade.
+  double price = 2;
+
+  // Size of the last trade.
+  double size = 3;
+
+  // When the trade occurred.
+  google.protobuf.Timestamp timestamp = 4;
+}

@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package polybot.v1;
+
+option go_package = "github.com/alanyoungcy/polymarketbot/internal/pb/polybot/v1;polybotv1";
+
+import "google/protobuf/timestamp.proto";
+import "polybot/v1/order.proto";
+
+// PositionStatus tracks whether a position is still active.
+enum PositionStatus {
+  POSITION_STATUS_UNSPECIFIED = 0;
+  POSITION_STATUS_OPEN = 1;
+  POSITION_STATUS_CLOSED = 2;
+}
+
+// Position represents a held position in a market outcome.
+message Position {
+  // Unique position identifier.
+  string id = 1;
+
+  // Market this position belongs to.
+  string market_id = 2;
+
+  // CLOB token ID for the specific outcome.
+  string token_id = 3;
+
+  // Wallet address holding the position.
+  string wallet = 4;
+
+  // Which side the position was entered on.
+  OrderSide side = 5;
+
+  // Direction label (e.g. "LONG", "SHORT").
+  string direction = 6;
+
+  // Average entry price (display units).
+  double entry_price = 7;
+
+  // Current market price (display units).
+  double current_price = 8;
+
+  // Position size in tokens.
+  double size = 9;
+
+  // Unrealized profit/loss in USDC.
+  double unrealized_pnl = 10;
+
+  // Realized profit/loss in USDC.
+  double realized_pnl = 11;
+
+  // Take-profit price target.
+  double take_profit = 12;
+
+  // Stop-loss price target.
+  double stop_loss = 13;
+
+  // Whether the position is open or closed.
+  PositionStatus status = 14;
+
+  // Name of the strategy managing this position.
+  string strategy = 15;
+
+  // When the position was opened.
+  google.protobuf.Timestamp created_at = 16;
+
+  // When the position was last updated.
+  google.protobuf.Timestamp updated_at = 17;
+}
+
+// PositionUpdate wraps a position for event streaming.
+message PositionUpdate {
+  Position position = 1;
+}

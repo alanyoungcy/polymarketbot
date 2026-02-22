@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package polybot.v1;
+
+option go_package = "github.com/alanyoungcy/polymarketbot/internal/pb/polybot/v1;polybotv1";
+
+import "google/protobuf/timestamp.proto";
+import "polybot/v1/orderbook.proto";
+import "polybot/v1/signal.proto";
+import "polybot/v1/order.proto";
+import "polybot/v1/position.proto";
+import "polybot/v1/pipeline.proto";
+
+// BotStatus provides a high-level overview of the bot's current state.
+message BotStatus {
+  // Operating mode (e.g. "live", "paper", "backtest").
+  string mode = 1;
+
+  // Whether the WebSocket connection is established.
+  bool ws_connected = 2;
+
+  // Seconds since the bot started.
+  int64 uptime_seconds = 3;
+
+  // Number of currently open positions.
+  int32 open_positions = 4;
+
+  // Number of currently open orders.
+  int32 open_orders = 5;
+
+  // Name of the active strategy.
+  string strategy_name = 6;
+}
+
+// Event is the top-level envelope for all events flowing through the system.
+message Event {
+  // Unique event identifier.
+  string event_id = 1;
+
+  // Event type discriminator (e.g. "orderbook_snapshot", "trade_signal").
+  string type = 2;
+
+  // When the event was created.
+  google.protobuf.Timestamp timestamp = 3;
+
+  // The event payload; exactly one field will be set.
+  oneof payload {
+    OrderbookSnapshot orderbook_snapshot = 10;
+    PriceChange price_change = 11;
+    LastTradePrice last_trade_price = 12;
+    TradeSignal trade_signal = 13;
+    ArbOpportunity arb_opportunity = 14;
+    OrderResult order_result = 15;
+    PositionUpdate position_update = 16;
+    BotStatus bot_status = 17;
+    PipelineStatus pipeline_status = 18;
+  }
+}

@@ -1,0 +1,145 @@
+# Example configuration — copy to config.toml and fill in values.
+# Environment variables (POLYBOT_*) override values set here.
+
+mode      = "trade"
+log_level = "info"
+
+[wallet]
+# private_key = "0x..."                 # Prefer env: POLYBOT_WALLET_PRIVATE_KEY
+safe_address  = ""
+encrypted_key_path = ""
+# key_password = ""                     # Always use env: POLYBOT_WALLET_KEY_PASSWORD
+
+[polymarket]
+clob_host      = "https://clob.polymarket.com"
+gamma_host     = "https://gamma-api.polymarket.com"
+ws_host        = "wss://ws-subscriptions-clob.polymarket.com"
+chain_id       = 137
+signature_type = 2                       # 2 = Gnosis Safe, 1 = EOA
+
+[builder]
+# api_key        = ""                   # Prefer env vars
+# api_secret     = ""
+# api_passphrase = ""
+
+[kalshi]
+# api_key              = ""
+# rsa_private_key_path = ""
+base_url = "https://api.elections.kalshi.com/trade-api/v2"
+
+[supabase]
+# Preferred for Supabase pooler/direct URLs:
+# dsn         = "postgresql://user:password@host:5432/postgres?sslmode=require"
+host          = "localhost"
+port          = 5432
+database      = "postgres"
+user          = "postgres"
+# password    = ""                      # Use env: POLYBOT_SUPABASE_PASSWORD
+ssl_mode      = "disable"
+pool_max_conns = 10
+pool_min_conns = 2
+api_url       = ""
+# api_key     = ""                      # Use env: POLYBOT_SUPABASE_API_KEY
+run_migrations = true
+
+[redis]
+addr       = "localhost:6379"
+# password = ""                         # Use env: POLYBOT_REDIS_PASSWORD
+db         = 0
+pool_size  = 20
+max_retries = 3
+tls_enabled = false
+
+[s3]
+endpoint         = "http://localhost:9000"     # iDrive e2: "https://YOUR_ENDPOINT.e2.idrivee2.com"
+region           = "us-east-1"
+bucket           = "polybot-data"
+# access_key     = ""                         # Use env: POLYBOT_S3_ACCESS_KEY
+# secret_key     = ""                         # Use env: POLYBOT_S3_SECRET_KEY
+use_ssl          = false                      # true for iDrive e2 / AWS
+force_path_style = true                       # Required for iDrive e2, MinIO
+
+[strategy]
+name          = "flash_crash"
+# false = keep scanning and expose candidates for manual bets from dashboard
+auto_execute  = true
+coin          = "ETH"
+size          = 5.0
+price_scale   = 1000000
+size_scale    = 1000000
+max_positions = 1
+take_profit   = 0.10
+stop_loss     = 0.05
+
+[strategy.params]
+drop_threshold       = 0.30
+lookback_seconds     = 10
+
+[strategy.yes_no_spread]
+enabled      = true
+min_edge_bps = 40
+size_per_leg = 5.0
+ttl_seconds  = 30
+max_stale_sec = 5
+cooldown_sec = 2
+
+[strategy.cross_platform_arb]
+enabled      = false
+min_edge_bps = 60
+size_per_leg = 5.0
+ttl_seconds  = 30
+refresh_sec  = 5
+max_stale_sec = 8
+cooldown_sec = 3
+
+[strategy.cross_platform_arb.market_map]
+# "POLYMARKET_MARKET_ID_OR_SLUG" = "KALSHI_TICKER"
+
+[strategy.temporal_overlap]
+enabled         = false
+min_edge_bps    = 80
+size_per_leg    = 5.0
+ttl_seconds     = 30
+max_stale_sec   = 6
+cooldown_sec    = 3
+refresh_minutes = 10
+max_pairs       = 100
+
+[arbitrage]
+# strategy: which arbitrage strategy to run — "spread", "imbalance", or "yes_no_spread"
+strategy               = "spread"
+enabled                = false
+min_net_edge_bps      = 50.0
+max_trade_amount      = 10.0
+max_trades_per_opp    = 2
+min_duration_ms       = 500
+max_leg_gap_ms        = 2000
+max_unhedged_notional = 50.0
+max_slippage_bps      = 20.0
+kill_switch_loss_usd  = 100.0
+min_spread_bps        = 30.0
+imbalance_ratio_threshold = 1.5
+
+[arbitrage.per_venue_fee_bps]
+polymarket = 0.0
+kalshi     = 7.0
+
+[pipeline]
+enabled               = false
+# Leave empty to skip Goldsky; set to your subgraph URL when you have one (e.g. from goldsky.com).
+goldsky_url           = ""
+# goldsky_api_key     = ""  # required when using /api/private/... endpoint
+scrape_interval       = "5m"
+archive_retention_days = 90
+archive_cron          = "0 3 1 * *"
+
+[server]
+enabled      = true
+port         = 8000
+cors_origins = ["http://localhost:3000", "http://localhost:5173"]
+
+[notify]
+# telegram_token      = ""
+# telegram_chat_id    = ""
+# discord_webhook_url = ""
+events = ["arb_detected", "order_filled", "position_closed", "error"]

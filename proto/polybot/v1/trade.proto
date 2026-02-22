@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package polybot.v1;
+
+option go_package = "github.com/alanyoungcy/polymarketbot/internal/pb/polybot/v1;polybotv1";
+
+import "google/protobuf/timestamp.proto";
+import "polybot/v1/order.proto";
+
+// Trade represents a single executed trade on Polymarket.
+message Trade {
+  // Unique trade identifier.
+  string id = 1;
+
+  // Source of the trade data (e.g. "polymarket", "kalshi").
+  string source = 2;
+
+  // Trade ID from the source system.
+  string source_trade_id = 3;
+
+  // When the trade was executed.
+  google.protobuf.Timestamp timestamp = 4;
+
+  // Market the trade belongs to.
+  string market_id = 5;
+
+  // Maker wallet address.
+  string maker = 6;
+
+  // Taker wallet address.
+  string taker = 7;
+
+  // Which outcome token was traded.
+  OrderSide token_side = 8;
+
+  // Direction from the maker's perspective.
+  string maker_direction = 9;
+
+  // Direction from the taker's perspective.
+  string taker_direction = 10;
+
+  // Execution price (display units).
+  double price = 11;
+
+  // Trade value in USDC.
+  double usd_amount = 12;
+
+  // Number of tokens exchanged.
+  double token_amount = 13;
+
+  // On-chain transaction hash.
+  string tx_hash = 14;
+}

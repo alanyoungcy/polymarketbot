@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS strategy_configs (
+    name TEXT PRIMARY KEY,
+    config_json JSONB NOT NULL DEFAULT '{}',
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
