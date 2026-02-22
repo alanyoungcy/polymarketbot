@@ -49,6 +49,9 @@ db         = 0
 pool_size  = 20
 max_retries = 3
 tls_enabled = false
+# For Redis Cloud 30MB: cap stream length and set TTL so old keys are evicted
+# stream_max_len    = 500               # max entries per stream (POLYBOT_REDIS_STREAM_MAX_LEN)
+# cache_ttl_minutes = 15                # TTL for orderbook/price/market cache keys (POLYBOT_REDIS_CACHE_TTL_MINUTES)
 
 [s3]
 endpoint         = "http://localhost:9000"     # iDrive e2: "https://YOUR_ENDPOINT.e2.idrivee2.com"
@@ -130,8 +133,11 @@ enabled               = false
 goldsky_url           = ""
 # goldsky_api_key     = ""  # required when using /api/private/... endpoint
 scrape_interval       = "5m"
-archive_retention_days = 90
+# Supabase ~500MB: archive old rows to S3 then purge from DB (keep last N days in DB)
+archive_retention_days = 30
 archive_cron          = "0 3 1 * *"
+# S3 ~10GB: delete archive files older than N months (POLYBOT_PIPELINE_S3_ARCHIVE_RETENTION_MONTHS)
+# s3_archive_retention_months = 6
 
 [server]
 enabled      = true

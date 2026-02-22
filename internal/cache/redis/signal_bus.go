@@ -9,19 +9,28 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// streamMaxLen is the approximate maximum length for Redis streams, enforced
-// via XADD MAXLEN ~.
-const streamMaxLen int64 = 10000
+// defaultStreamMaxLen is used when StreamMaxLen is not set (0).
+const defaultStreamMaxLen int64 = 10000
 
 // SignalBus implements domain.SignalBus using Redis Pub/Sub for ephemeral
 // messaging and Redis Streams for durable, ordered message delivery.
+// streamMaxLen caps stream size (e.g. 500 for Redis Cloud 30MB).
 type SignalBus struct {
-	rdb *redis.Client
+	rdb          *redis.Client
+	streamMaxLen int64
 }
 
-// NewSignalBus creates a SignalBus backed by the given Client.
+// NewSignalBus creates a SignalBus backed by the given Client with default stream cap.
 func NewSignalBus(c *Client) *SignalBus {
-	return &SignalBus{rdb: c.Underlying()}
+	return &SignalBus{rdb: c.Underlying(), streamMaxLen: defaultStreamMaxLen}
+}
+
+// NewSignalBusWithMaxLen creates a SignalBus with a custom max stream length (XADD MAXLEN ~).
+func NewSignalBusWithMaxLen(c *Client, maxLen int64) *SignalBus {
+	if maxLen <= 0 {
+		maxLen = defaultStreamMaxLen
+	}
+	return &SignalBus{rdb: c.Underlying(), streamMaxLen: maxLen}
 }
 
 // Publish sends a raw byte payload to a Redis Pub/Sub channel.
@@ -83,11 +92,11 @@ func hasPattern(channel string) bool {
 }
 
 // StreamAppend appends a payload to a Redis stream using XADD with an
-// approximate MAXLEN of 10,000 entries for automatic trimming.
+// approximate MAXLEN for automatic trimming (configurable for small Redis instances).
 func (sb *SignalBus) StreamAppend(ctx context.Context, stream string, payload []byte) error {
 	args := &redis.XAddArgs{
 		Stream: stream,
-		MaxLen: streamMaxLen,
+		MaxLen: sb.streamMaxLen,
 		Approx: true,
 		Values: map[string]interface{}{
 			"payload": payload,

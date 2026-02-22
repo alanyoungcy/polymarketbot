@@ -15,26 +15,21 @@ import (
 var orderbookUpdateLua string
 
 // OrderbookCache implements domain.OrderbookCache using Redis sorted sets and
-// hashes for each asset's orderbook.
-//
-// Key schema:
-//
-//	book:{assetID}:bids   - sorted set of bid prices (score = price)
-//	book:{assetID}:asks   - sorted set of ask prices (score = price)
-//	book:{assetID}:bid:size - hash mapping price -> size for bids
-//	book:{assetID}:ask:size - hash mapping price -> size for asks
-//	book:{assetID}:bbo    - hash with fields "bid" and "ask" (best prices)
-//	book:{assetID}:meta   - hash with "ts" field (snapshot timestamp)
+// hashes for each asset's orderbook. When ttl > 0, all keys get that TTL so
+// Redis can evict old data (e.g. for 30MB limit).
 type OrderbookCache struct {
 	rdb              *redis.Client
 	orderbookUpdate  *redis.Script
+	ttl              time.Duration
 }
 
 // NewOrderbookCache creates an OrderbookCache backed by the given Client.
-func NewOrderbookCache(c *Client) *OrderbookCache {
+// ttl is applied to cache keys when > 0 (e.g. 15*time.Minute for small Redis).
+func NewOrderbookCache(c *Client, ttl time.Duration) *OrderbookCache {
 	return &OrderbookCache{
 		rdb:             c.Underlying(),
 		orderbookUpdate: redis.NewScript(orderbookUpdateLua),
+		ttl:             ttl,
 	}
 }
 
@@ -87,6 +82,12 @@ func (oc *OrderbookCache) SetSnapshot(ctx context.Context, assetID string, snap 
 
 	// Set metadata.
 	pipe.HSet(ctx, metaKey, "ts", strconv.FormatInt(snap.Timestamp.UnixNano(), 10))
+
+	if oc.ttl > 0 {
+		for _, key := range []string{bidsKey, asksKey, bidSizeKey, askSizeKey, bboKey, metaKey} {
+			pipe.Expire(ctx, key, oc.ttl)
+		}
+	}
 
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("redis: set orderbook snapshot %s: %w", assetID, err)

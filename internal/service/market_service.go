@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -45,10 +46,12 @@ func (s *MarketService) SyncMarkets(ctx context.Context, markets []domain.Market
 	// Invalidate cache entries for every synced market.
 	for _, m := range markets {
 		if err := s.cache.Invalidate(ctx, m.ID); err != nil {
-			s.logger.WarnContext(ctx, "market_service: cache invalidate failed",
-				slog.String("market_id", m.ID),
-				slog.String("error", err.Error()),
-			)
+			if !errors.Is(err, context.Canceled) {
+				s.logger.WarnContext(ctx, "market_service: cache invalidate failed",
+					slog.String("market_id", m.ID),
+					slog.String("error", err.Error()),
+				)
+			}
 			// Non-fatal: the cache will eventually expire on its own.
 		}
 	}

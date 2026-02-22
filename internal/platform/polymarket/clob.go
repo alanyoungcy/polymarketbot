@@ -162,8 +162,10 @@ func (c *ClobClient) GetOpenOrders(ctx context.Context) ([]domain.Order, error) 
 }
 
 // DeriveAPIKey performs the CLOB auth flow to obtain an HMAC API key. It
-// signs a ClobAuth EIP-712 message and sends it to the /auth/api-key endpoint.
-// On success it populates the client's hmacAuth field.
+// signs a ClobAuth EIP-712 message and sends it with L1 headers to the
+// derive-api-key endpoint. Per Polymarket docs, L1 requires POLY_ADDRESS,
+// POLY_SIGNATURE, POLY_TIMESTAMP, POLY_NONCE. On success it populates the
+// client's hmacAuth field.
 func (c *ClobClient) DeriveAPIKey(ctx context.Context) error {
 	address := c.signer.Address().Hex()
 	timestamp := time.Now().Unix()
@@ -174,23 +176,14 @@ func (c *ClobClient) DeriveAPIKey(ctx context.Context) error {
 		return fmt.Errorf("polymarket/clob: sign auth message: %w", err)
 	}
 
-	body := map[string]any{
-		"address":   address,
-		"timestamp": timestamp,
-		"nonce":     nonce,
-		"signature": sig,
-	}
-
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("polymarket/clob: marshal auth body: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/auth/api-key", bytes.NewReader(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/auth/derive-api-key", nil)
 	if err != nil {
 		return fmt.Errorf("polymarket/clob: create auth request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("POLY_ADDRESS", address)
+	req.Header.Set("POLY_SIGNATURE", sig)
+	req.Header.Set("POLY_TIMESTAMP", fmt.Sprintf("%d", timestamp))
+	req.Header.Set("POLY_NONCE", fmt.Sprintf("%d", nonce))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

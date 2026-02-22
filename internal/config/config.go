@@ -74,14 +74,18 @@ type SupabaseConfig struct {
 	RunMigrations bool   `toml:"run_migrations"`
 }
 
-// RedisConfig holds Redis connection parameters.
+// RedisConfig holds Redis connection parameters and limits for small instances
+// (e.g. Redis Cloud 30MB). StreamMaxLen caps Redis stream length; CacheTTLMinutes
+// sets TTL on cache keys (orderbook, price, etc.) so old data is evicted.
 type RedisConfig struct {
-	Addr       string `toml:"addr"`
-	Password   string `toml:"password"`
-	DB         int    `toml:"db"`
-	PoolSize   int    `toml:"pool_size"`
-	MaxRetries int    `toml:"max_retries"`
-	TLSEnabled bool   `toml:"tls_enabled"`
+	Addr             string `toml:"addr"`
+	Password         string `toml:"password"`
+	DB               int    `toml:"db"`
+	PoolSize         int    `toml:"pool_size"`
+	MaxRetries       int    `toml:"max_retries"`
+	TLSEnabled       bool   `toml:"tls_enabled"`
+	StreamMaxLen     int    `toml:"stream_max_len"`     // max entries per stream (e.g. 500 for ~30MB)
+	CacheTTLMinutes  int    `toml:"cache_ttl_minutes"`  // TTL for cache keys (orderbook, price, market)
 }
 
 // S3Config holds S3-compatible object storage parameters.
@@ -215,13 +219,16 @@ type ArbitrageConfig struct {
 }
 
 // PipelineConfig holds data-pipeline / scraping parameters.
+// ArchiveRetentionDays: keep only this many days in DB before archiving to S3 (then purged).
+// S3ArchiveRetentionMonths: delete S3 archive files older than this to cap storage (e.g. 10GB).
 type PipelineConfig struct {
-	Enabled              bool     `toml:"enabled"`
-	GoldskyURL           string   `toml:"goldsky_url"`
-	GoldskyAPIKey        string   `toml:"goldsky_api_key"`
-	ScrapeInterval       duration `toml:"scrape_interval"`
-	ArchiveRetentionDays int      `toml:"archive_retention_days"`
-	ArchiveCron          string   `toml:"archive_cron"`
+	Enabled                  bool     `toml:"enabled"`
+	GoldskyURL               string   `toml:"goldsky_url"`
+	GoldskyAPIKey            string   `toml:"goldsky_api_key"`
+	ScrapeInterval           duration `toml:"scrape_interval"`
+	ArchiveRetentionDays     int      `toml:"archive_retention_days"`
+	ArchiveCron              string   `toml:"archive_cron"`
+	S3ArchiveRetentionMonths int      `toml:"s3_archive_retention_months"`
 }
 
 // duration is a wrapper around time.Duration that supports TOML string decoding
@@ -284,11 +291,13 @@ func Defaults() Config {
 			RunMigrations: true,
 		},
 		Redis: RedisConfig{
-			Addr:       "localhost:6379",
-			DB:         0,
-			PoolSize:   20,
-			MaxRetries: 3,
-			TLSEnabled: false,
+			Addr:            "localhost:6379",
+			DB:              0,
+			PoolSize:        20,
+			MaxRetries:      3,
+			TLSEnabled:      false,
+			StreamMaxLen:     500,
+			CacheTTLMinutes: 15,
 		},
 		S3: S3Config{
 			Endpoint:       "http://localhost:9000",
@@ -356,12 +365,13 @@ func Defaults() Config {
 			},
 		},
 		Pipeline: PipelineConfig{
-			Enabled:              false,
-			GoldskyURL:           "", // Set to your Goldsky subgraph URL when you have one; leave empty to skip order-fill scrape
-			GoldskyAPIKey:        "",
-			ScrapeInterval:       duration{5 * time.Minute},
-			ArchiveRetentionDays: 90,
-			ArchiveCron:          "0 3 1 * *",
+			Enabled:                  false,
+			GoldskyURL:               "", // Set to your Goldsky subgraph URL when you have one; leave empty to skip order-fill scrape
+			GoldskyAPIKey:            "",
+			ScrapeInterval:            duration{5 * time.Minute},
+			ArchiveRetentionDays:     30,
+			ArchiveCron:              "0 3 1 * *",
+			S3ArchiveRetentionMonths: 6,
 		},
 		Server: ServerConfig{
 			Enabled:     true,

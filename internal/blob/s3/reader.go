@@ -95,6 +95,19 @@ func (r *Reader) Exists(ctx context.Context, path string) (bool, error) {
 	return true, nil
 }
 
+// Delete removes the object at the given path. Idempotent: no error if the
+// object does not exist. Implements domain.BlobDeleter.
+func (r *Reader) Delete(ctx context.Context, path string) error {
+	_, err := r.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(r.bucket),
+		Key:    aws.String(path),
+	})
+	if err != nil {
+		return fmt.Errorf("s3blob: delete %s: %w", path, err)
+	}
+	return nil
+}
+
 // isNotFound returns true when the error indicates the requested S3 object
 // does not exist. It checks for both the SDK typed error (NoSuchKey) and
 // the generic 404 response.

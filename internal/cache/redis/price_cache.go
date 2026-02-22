@@ -12,15 +12,16 @@ import (
 )
 
 // PriceCache implements domain.PriceCache using Redis hashes.
-// Each asset's price is stored as a hash at key "price:{assetID}" with fields
-// "price" and "ts" (Unix nanosecond timestamp).
+// When ttl > 0, keys are set to expire so Redis can evict old data (e.g. 30MB limit).
 type PriceCache struct {
 	rdb *redis.Client
+	ttl time.Duration
 }
 
 // NewPriceCache creates a PriceCache backed by the given Client.
-func NewPriceCache(c *Client) *PriceCache {
-	return &PriceCache{rdb: c.Underlying()}
+// ttl is applied to cache keys when > 0 (e.g. 15*time.Minute).
+func NewPriceCache(c *Client, ttl time.Duration) *PriceCache {
+	return &PriceCache{rdb: c.Underlying(), ttl: ttl}
 }
 
 func priceKey(assetID string) string {
@@ -36,6 +37,11 @@ func (pc *PriceCache) SetPrice(ctx context.Context, assetID string, price float6
 	}
 	if err := pc.rdb.HSet(ctx, key, fields).Err(); err != nil {
 		return fmt.Errorf("redis: set price %s: %w", assetID, err)
+	}
+	if pc.ttl > 0 {
+		if err := pc.rdb.Expire(ctx, key, pc.ttl).Err(); err != nil {
+			return fmt.Errorf("redis: set price expire %s: %w", assetID, err)
+		}
 	}
 	return nil
 }

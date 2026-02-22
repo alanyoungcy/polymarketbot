@@ -183,3 +183,23 @@ func (s *TradeStore) ListByWallet(ctx context.Context, wallet string, opts domai
 	}
 	return trades, nil
 }
+
+// ListBefore returns all trades with timestamp strictly before the given time (for archiving).
+func (s *TradeStore) ListBefore(ctx context.Context, before time.Time) ([]domain.Trade, error) {
+	query := `SELECT ` + tradeSelectCols + ` FROM trades WHERE timestamp < $1 ORDER BY timestamp ASC`
+	rows, err := s.pool.Query(ctx, query, before)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: list trades before: %w", err)
+	}
+	defer rows.Close()
+	return scanTradeRows(rows)
+}
+
+// DeleteBefore deletes all trades with timestamp before the given time. Returns the number deleted.
+func (s *TradeStore) DeleteBefore(ctx context.Context, before time.Time) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM trades WHERE timestamp < $1`, before)
+	if err != nil {
+		return 0, fmt.Errorf("postgres: delete trades before: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}

@@ -80,6 +80,8 @@ func applyEnvOverrides(cfg *Config) {
 	setInt(&cfg.Redis.PoolSize, "POLYBOT_REDIS_POOL_SIZE")
 	setInt(&cfg.Redis.MaxRetries, "POLYBOT_REDIS_MAX_RETRIES")
 	setBool(&cfg.Redis.TLSEnabled, "POLYBOT_REDIS_TLS_ENABLED")
+	setInt(&cfg.Redis.StreamMaxLen, "POLYBOT_REDIS_STREAM_MAX_LEN")
+	setInt(&cfg.Redis.CacheTTLMinutes, "POLYBOT_REDIS_CACHE_TTL_MINUTES")
 
 	// ── S3 ──
 	setStr(&cfg.S3.Endpoint, "POLYBOT_S3_ENDPOINT")
@@ -125,6 +127,7 @@ func applyEnvOverrides(cfg *Config) {
 	setDuration(&cfg.Pipeline.ScrapeInterval, "POLYBOT_PIPELINE_SCRAPE_INTERVAL")
 	setInt(&cfg.Pipeline.ArchiveRetentionDays, "POLYBOT_PIPELINE_ARCHIVE_RETENTION_DAYS")
 	setStr(&cfg.Pipeline.ArchiveCron, "POLYBOT_PIPELINE_ARCHIVE_CRON")
+	setInt(&cfg.Pipeline.S3ArchiveRetentionMonths, "POLYBOT_PIPELINE_S3_ARCHIVE_RETENTION_MONTHS")
 
 	// ── Server ──
 	setBool(&cfg.Server.Enabled, "POLYBOT_SERVER_ENABLED")

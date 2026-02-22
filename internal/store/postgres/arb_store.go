@@ -122,3 +122,45 @@ func (s *ArbStore) ListRecent(ctx context.Context, limit int) ([]domain.ArbOppor
 	}
 	return opps, nil
 }
+
+// ListBefore returns all arb opportunities with detected_at strictly before the given time (for archiving).
+func (s *ArbStore) ListBefore(ctx context.Context, before time.Time) ([]domain.ArbOpportunity, error) {
+	query := `SELECT ` + arbSelectCols + ` FROM arb_history WHERE detected_at < $1 ORDER BY detected_at ASC`
+	rows, err := s.pool.Query(ctx, query, before)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: list arbs before: %w", err)
+	}
+	defer rows.Close()
+
+	var opps []domain.ArbOpportunity
+	for rows.Next() {
+		var opp domain.ArbOpportunity
+		var durationMs int64
+		var executedAt *time.Time
+
+		if err := rows.Scan(
+			&opp.ID, &opp.PolyMarketID, &opp.PolyTokenID, &opp.PolyPrice,
+			&opp.KalshiMarketID, &opp.KalshiPrice,
+			&opp.GrossEdgeBps, &opp.EstFeeBps, &opp.EstSlippageBps, &opp.EstLatencyBps,
+			&opp.NetEdgeBps, &opp.ExpectedPnLUSD, &opp.Direction, &opp.MaxAmount,
+			&opp.DetectedAt, &durationMs, &opp.Executed, &executedAt,
+		); err != nil {
+			return nil, fmt.Errorf("postgres: scan arb: %w", err)
+		}
+		opp.Duration = time.Duration(durationMs) * time.Millisecond
+		opps = append(opps, opp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("postgres: list arbs before rows: %w", err)
+	}
+	return opps, nil
+}
+
+// DeleteBefore deletes all arb opportunities detected before the given time. Returns the number deleted.
+func (s *ArbStore) DeleteBefore(ctx context.Context, before time.Time) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM arb_history WHERE detected_at < $1`, before)
+	if err != nil {
+		return 0, fmt.Errorf("postgres: delete arbs before: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}

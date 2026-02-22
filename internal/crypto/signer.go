@@ -21,9 +21,9 @@ var (
 		[]byte("EIP712Domain(string name,string version,uint256 chainId)"),
 	)
 
-	// ClobAuth(address address,uint256 timestamp,uint256 nonce)
+	// ClobAuth(address address,string timestamp,uint256 nonce,string message) — per Polymarket docs
 	clobAuthTypeHash = ethcrypto.Keccak256(
-		[]byte("ClobAuth(address address,uint256 timestamp,uint256 nonce)"),
+		[]byte("ClobAuth(address address,string timestamp,uint256 nonce,string message)"),
 	)
 
 	// Order(uint256 salt,address maker,address signer,address taker,uint256 tokenId,uint256 makerAmount,uint256 takerAmount,uint256 expiration,uint256 nonce,uint256 feeRateBps,uint8 side,uint8 signatureType)
@@ -88,16 +88,20 @@ func (s *Signer) Address() common.Address {
 
 // SignAuthMessage signs a ClobAuth EIP-712 message used to obtain an API key
 // from the Polymarket CLOB. The returned string is a hex-encoded signature
-// with recovery byte (65 bytes total).
+// with recovery byte (65 bytes total). Matches Polymarket docs: address,
+// timestamp (string), nonce, message "This message attests that I control the given wallet".
 func (s *Signer) SignAuthMessage(address string, timestamp, nonce int64) (string, error) {
 	addr := common.HexToAddress(address)
+	tsStr := fmt.Sprintf("%d", timestamp)
+	msg := "This message attests that I control the given wallet"
 
 	structHash := ethcrypto.Keccak256(
 		concatBytes(
 			clobAuthTypeHash,
 			common.LeftPadBytes(addr.Bytes(), 32),
-			bigIntTo32Bytes(big.NewInt(timestamp)),
+			ethcrypto.Keccak256([]byte(tsStr)),
 			bigIntTo32Bytes(big.NewInt(nonce)),
+			ethcrypto.Keccak256([]byte(msg)),
 		),
 	)
 

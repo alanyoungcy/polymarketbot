@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -16,19 +17,25 @@ type EventFetcher interface {
 }
 
 // EventScraper scrapes event data from the Gamma API and syncs condition
-// groups and their market links to the store.
+// groups and their market links to the store. If marketStore is set, it
+// upserts each market before linking so condition_group_markets.market_id
+// satisfies the foreign key to markets(id).
 type EventScraper struct {
-	groups  domain.ConditionGroupStore
-	fetcher EventFetcher
-	logger  *slog.Logger
+	groups      domain.ConditionGroupStore
+	marketStore domain.MarketStore
+	fetcher     EventFetcher
+	logger      *slog.Logger
 }
 
-// NewEventScraper creates a new EventScraper.
-func NewEventScraper(groups domain.ConditionGroupStore, fetcher EventFetcher, logger *slog.Logger) *EventScraper {
+// NewEventScraper creates a new EventScraper. Pass a non-nil marketStore to
+// upsert markets before linking (avoids FK violations when the market scraper
+// has not yet ingested those markets).
+func NewEventScraper(groups domain.ConditionGroupStore, fetcher EventFetcher, logger *slog.Logger, marketStore domain.MarketStore) *EventScraper {
 	return &EventScraper{
-		groups:  groups,
-		fetcher: fetcher,
-		logger:  logger,
+		groups:      groups,
+		marketStore: marketStore,
+		fetcher:     fetcher,
+		logger:      logger,
 	}
 }
 
@@ -56,10 +63,12 @@ func (s *EventScraper) Run(ctx context.Context) error {
 		for i := range events {
 			cg := events[i].ToDomainConditionGroup()
 			if err := s.groups.Upsert(ctx, cg); err != nil {
-				s.logger.Error("event scraper: upsert condition group failed",
-					slog.String("group_id", cg.ID),
-					slog.String("error", err.Error()),
-				)
+				if !errors.Is(err, context.Canceled) {
+					s.logger.Error("event scraper: upsert condition group failed",
+						slog.String("group_id", cg.ID),
+						slog.String("error", err.Error()),
+					)
+				}
 				continue
 			}
 
@@ -67,12 +76,25 @@ func (s *EventScraper) Run(ctx context.Context) error {
 				if mkt.ID == "" {
 					continue
 				}
+				if s.marketStore != nil {
+					if err := s.marketStore.Upsert(ctx, mkt.ToDomainMarket()); err != nil {
+						if !errors.Is(err, context.Canceled) {
+							s.logger.Error("event scraper: upsert market failed",
+								slog.String("market_id", mkt.ID),
+								slog.String("error", err.Error()),
+							)
+						}
+						continue
+					}
+				}
 				if err := s.groups.LinkMarket(ctx, cg.ID, mkt.ID); err != nil {
-					s.logger.Error("event scraper: link market failed",
-						slog.String("group_id", cg.ID),
-						slog.String("market_id", mkt.ID),
-						slog.String("error", err.Error()),
-					)
+					if !errors.Is(err, context.Canceled) {
+						s.logger.Error("event scraper: link market failed",
+							slog.String("group_id", cg.ID),
+							slog.String("market_id", mkt.ID),
+							slog.String("error", err.Error()),
+						)
+					}
 				}
 			}
 		}

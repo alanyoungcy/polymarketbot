@@ -950,7 +950,7 @@ func (a *App) startDataPipeline(ctx context.Context, g *errgroup.Group, deps *De
 	// Event scraper: populate condition_groups and condition_group_markets.
 	if deps.ConditionGroupStore != nil {
 		gammaClient := polymarket.NewGammaClient(a.cfg.Polymarket.GammaHost)
-		eventScraper := pipeline.NewEventScraper(deps.ConditionGroupStore, gammaClient, a.logger)
+		eventScraper := pipeline.NewEventScraper(deps.ConditionGroupStore, gammaClient, a.logger, deps.MarketStore)
 		g.Go(func() error {
 			err := eventScraper.RunLoop(ctx, interval)
 			if ctx.Err() != nil {

@@ -27,6 +27,11 @@ type BlobReader interface {
 	Exists(ctx context.Context, path string) (bool, error)
 }
 
+// BlobDeleter deletes objects from storage (e.g. for S3 retention purge).
+type BlobDeleter interface {
+	Delete(ctx context.Context, path string) error
+}
+
 // Archiver moves old data from the database to cold storage.
 type Archiver interface {
 	ArchiveTrades(ctx context.Context, before time.Time) (int64, error)

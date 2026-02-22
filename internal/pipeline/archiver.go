@@ -11,25 +11,57 @@ import (
 	"github.com/alanyoungcy/polymarketbot/internal/domain"
 )
 
-// Archiver moves old data from the database to S3 cold storage.
+// Archiver moves old data from the database to S3 cold storage, purges DB rows
+// after a successful archive, and optionally purges old S3 archive files.
 type Archiver struct {
-	blobArchiver  domain.Archiver
-	retentionDays int
-	logger        *slog.Logger
+	blobArchiver       domain.Archiver
+	tradeStore         domain.TradeStore
+	orderStore         domain.OrderStore
+	arbStore           domain.ArbStore
+	retentionDays      int
+	s3RetentionMonths  int
+	blobReader         domain.BlobReader
+	blobDeleter        domain.BlobDeleter
+	logger             *slog.Logger
 }
 
-// NewArchiver creates a new Archiver.
-func NewArchiver(blobArchiver domain.Archiver, retentionDays int, logger *slog.Logger) *Archiver {
-	return &Archiver{
+// ArchiverOption configures the pipeline Archiver.
+type ArchiverOption func(*Archiver)
+
+// WithStores sets the stores used to purge DB rows after archiving.
+func WithStores(trade domain.TradeStore, order domain.OrderStore, arb domain.ArbStore) ArchiverOption {
+	return func(a *Archiver) {
+		a.tradeStore = trade
+		a.orderStore = order
+		a.arbStore = arb
+	}
+}
+
+// WithS3Purge enables purging of old S3 archive objects. reader and deleter must be non-nil.
+func WithS3Purge(reader domain.BlobReader, deleter domain.BlobDeleter, retentionMonths int) ArchiverOption {
+	return func(a *Archiver) {
+		a.blobReader = reader
+		a.blobDeleter = deleter
+		a.s3RetentionMonths = retentionMonths
+	}
+}
+
+// NewArchiver creates a new Archiver. Options can add DB purge and S3 purge.
+func NewArchiver(blobArchiver domain.Archiver, retentionDays int, logger *slog.Logger, opts ...ArchiverOption) *Archiver {
+	a := &Archiver{
 		blobArchiver:  blobArchiver,
 		retentionDays: retentionDays,
 		logger:        logger,
 	}
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
 }
 
 // Run executes a single archive run. It calculates the cutoff time based on
-// retentionDays and archives trades, orders, and arb history older than the
-// cutoff.
+// retentionDays, archives trades/orders/arb to S3, purges those rows from the DB,
+// then purges old S3 archive files if S3 purge is configured.
 func (a *Archiver) Run(ctx context.Context) error {
 	cutoff := time.Now().UTC().Add(-time.Duration(a.retentionDays) * 24 * time.Hour)
 	a.logger.Info("starting archive run",
@@ -42,18 +74,48 @@ func (a *Archiver) Run(ctx context.Context) error {
 		return fmt.Errorf("archiving trades before %v: %w", cutoff, err)
 	}
 	a.logger.Info("archived trades", slog.Int64("count", tradesArchived))
+	if a.tradeStore != nil && tradesArchived > 0 {
+		deleted, err := a.tradeStore.DeleteBefore(ctx, cutoff)
+		if err != nil {
+			a.logger.Error("purge trades after archive failed", slog.String("error", err.Error()))
+		} else {
+			a.logger.Info("purged trades from DB", slog.Int64("deleted", deleted))
+		}
+	}
 
 	ordersArchived, err := a.blobArchiver.ArchiveOrders(ctx, cutoff)
 	if err != nil {
 		return fmt.Errorf("archiving orders before %v: %w", cutoff, err)
 	}
 	a.logger.Info("archived orders", slog.Int64("count", ordersArchived))
+	if a.orderStore != nil && ordersArchived > 0 {
+		deleted, err := a.orderStore.DeleteBefore(ctx, cutoff)
+		if err != nil {
+			a.logger.Error("purge orders after archive failed", slog.String("error", err.Error()))
+		} else {
+			a.logger.Info("purged orders from DB", slog.Int64("deleted", deleted))
+		}
+	}
 
 	arbArchived, err := a.blobArchiver.ArchiveArbHistory(ctx, cutoff)
 	if err != nil {
 		return fmt.Errorf("archiving arb history before %v: %w", cutoff, err)
 	}
 	a.logger.Info("archived arb history", slog.Int64("count", arbArchived))
+	if a.arbStore != nil && arbArchived > 0 {
+		deleted, err := a.arbStore.DeleteBefore(ctx, cutoff)
+		if err != nil {
+			a.logger.Error("purge arb history after archive failed", slog.String("error", err.Error()))
+		} else {
+			a.logger.Info("purged arb history from DB", slog.Int64("deleted", deleted))
+		}
+	}
+
+	if a.blobReader != nil && a.blobDeleter != nil && a.s3RetentionMonths > 0 {
+		if err := a.purgeOldS3Archives(ctx); err != nil {
+			a.logger.Error("S3 archive purge failed", slog.String("error", err.Error()))
+		}
+	}
 
 	a.logger.Info("archive run complete",
 		slog.Int64("trades_archived", tradesArchived),
@@ -62,6 +124,56 @@ func (a *Archiver) Run(ctx context.Context) error {
 	)
 
 	return nil
+}
+
+// purgeOldS3Archives lists archive/*/ prefixes, parses YYYY-MM from keys, and
+// deletes objects older than s3RetentionMonths.
+func (a *Archiver) purgeOldS3Archives(ctx context.Context) error {
+	cutoffMonth := time.Now().UTC().AddDate(0, -a.s3RetentionMonths, 0)
+	cutoffYearMonth := cutoffMonth.Year()*100 + int(cutoffMonth.Month())
+
+	for _, prefix := range []string{"archive/trades/", "archive/orders/", "archive/arb_history/"} {
+		infos, err := a.blobReader.List(ctx, prefix)
+		if err != nil {
+			return fmt.Errorf("list %s: %w", prefix, err)
+		}
+		for _, info := range infos {
+			yearMonth, ok := parseArchiveKeyYearMonth(info.Path)
+			if !ok {
+				continue
+			}
+			if yearMonth < cutoffYearMonth {
+				if err := a.blobDeleter.Delete(ctx, info.Path); err != nil {
+					return fmt.Errorf("delete %s: %w", info.Path, err)
+				}
+				a.logger.Info("deleted old S3 archive", slog.String("path", info.Path))
+			}
+		}
+	}
+	return nil
+}
+
+// parseArchiveKeyYearMonth extracts YYYY-MM from a key like "archive/trades/2025-01.jsonl". Returns year*100+month and true, or 0, false.
+func parseArchiveKeyYearMonth(path string) (int, bool) {
+	// path: archive/trades/2025-01.jsonl
+	if !strings.HasSuffix(path, ".jsonl") {
+		return 0, false
+	}
+	base := strings.TrimSuffix(path, ".jsonl")
+	parts := strings.Split(base, "/")
+	if len(parts) < 2 {
+		return 0, false
+	}
+	datePart := parts[len(parts)-1]
+	if len(datePart) != 7 || datePart[4] != '-' {
+		return 0, false
+	}
+	year, err1 := strconv.Atoi(datePart[:4])
+	month, err2 := strconv.Atoi(datePart[5:7])
+	if err1 != nil || err2 != nil || month < 1 || month > 12 {
+		return 0, false
+	}
+	return year*100 + month, true
 }
 
 // RunCron runs the archiver on a cron schedule until the context is cancelled.

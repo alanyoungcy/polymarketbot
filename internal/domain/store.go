@@ -31,6 +31,10 @@ type OrderStore interface {
 	GetByID(ctx context.Context, id string) (Order, error)
 	ListOpen(ctx context.Context, wallet string) ([]Order, error)
 	ListByMarket(ctx context.Context, marketID string, opts ListOpts) ([]Order, error)
+	// ListBefore returns all orders created strictly before the given time (for archiving).
+	ListBefore(ctx context.Context, before time.Time) ([]Order, error)
+	// DeleteBefore deletes orders created before the given time (for retention purge). Returns count deleted.
+	DeleteBefore(ctx context.Context, before time.Time) (int64, error)
 }
 
 // PositionStore persists positions.
@@ -49,6 +53,10 @@ type TradeStore interface {
 	GetLastTimestamp(ctx context.Context) (time.Time, error)
 	ListByMarket(ctx context.Context, marketID string, opts ListOpts) ([]Trade, error)
 	ListByWallet(ctx context.Context, wallet string, opts ListOpts) ([]Trade, error)
+	// ListBefore returns all trades with timestamp strictly before the given time (for archiving).
+	ListBefore(ctx context.Context, before time.Time) ([]Trade, error)
+	// DeleteBefore deletes trades with timestamp before the given time (for retention purge). Returns count deleted.
+	DeleteBefore(ctx context.Context, before time.Time) (int64, error)
 }
 
 // ArbStore persists arbitrage opportunity history.
@@ -56,6 +64,10 @@ type ArbStore interface {
 	Insert(ctx context.Context, opp ArbOpportunity) error
 	MarkExecuted(ctx context.Context, id string) error
 	ListRecent(ctx context.Context, limit int) ([]ArbOpportunity, error)
+	// ListBefore returns all arb opportunities detected strictly before the given time (for archiving).
+	ListBefore(ctx context.Context, before time.Time) ([]ArbOpportunity, error)
+	// DeleteBefore deletes arb opportunities detected before the given time (for retention purge). Returns count deleted.
+	DeleteBefore(ctx context.Context, before time.Time) (int64, error)
 }
 
 // AuditEntry is a single audit log row.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	s3blob "github.com/alanyoungcy/polymarketbot/internal/blob/s3"
 	"github.com/alanyoungcy/polymarketbot/internal/cache/redis"
@@ -40,9 +41,10 @@ type Dependencies struct {
 	SignalBus            domain.SignalBus
 
 	// Blob storage
-	BlobWriter domain.BlobWriter
-	BlobReader domain.BlobReader
-	Archiver   domain.Archiver
+	BlobWriter  domain.BlobWriter
+	BlobReader  domain.BlobReader
+	BlobDeleter domain.BlobDeleter
+	Archiver    domain.Archiver
 
 	// Notifications
 	Notifier *notify.Notifier
@@ -139,13 +141,22 @@ func Wire(ctx context.Context, cfg *config.Config) (*Dependencies, func(), error
 	}
 	closers = append(closers, func() { _ = redisClient.Close() })
 
-	deps.PriceCache = redis.NewPriceCache(redisClient)
-	deps.BookCache = redis.NewOrderbookCache(redisClient)
+	redisTTL := time.Duration(0)
+	if cfg.Redis.CacheTTLMinutes > 0 {
+		redisTTL = time.Duration(cfg.Redis.CacheTTLMinutes) * time.Minute
+	}
+	streamMaxLen := int64(10000)
+	if cfg.Redis.StreamMaxLen > 0 {
+		streamMaxLen = int64(cfg.Redis.StreamMaxLen)
+	}
+
+	deps.PriceCache = redis.NewPriceCache(redisClient, redisTTL)
+	deps.BookCache = redis.NewOrderbookCache(redisClient, redisTTL)
 	deps.MarketCache = redis.NewMarketCache(redisClient)
 	deps.ConditionGroupCache = redis.NewConditionGroupCache(redisClient)
 	deps.RateLimiter = redis.NewRateLimiter(redisClient)
 	deps.LockManager = redis.NewLockManager(redisClient)
-	deps.SignalBus = redis.NewSignalBus(redisClient)
+	deps.SignalBus = redis.NewSignalBusWithMaxLen(redisClient, streamMaxLen)
 
 	// --- S3 blob storage (only for modes that need object storage) ---
 	if needsS3(cfg.Mode) {
@@ -165,7 +176,19 @@ func Wire(ctx context.Context, cfg *config.Config) (*Dependencies, func(), error
 		closers = append(closers, func() { _ = s3Client.Close() })
 
 		deps.BlobWriter = s3blob.NewWriter(s3Client)
-		deps.BlobReader = s3blob.NewReader(s3Client)
+		reader := s3blob.NewReader(s3Client)
+		deps.BlobReader = reader
+		deps.BlobDeleter = reader // same type implements BlobDeleter
+		// Archiver: only when we also have Postgres (stores with ListBefore + AuditStore)
+		if deps.TradeStore != nil && deps.OrderStore != nil && deps.ArbStore != nil && deps.AuditStore != nil {
+			deps.Archiver = s3blob.NewArchiver(
+				deps.BlobWriter,
+				deps.TradeStore,
+				deps.OrderStore,
+				deps.ArbStore,
+				deps.AuditStore,
+			)
+		}
 	}
 
 	// --- Notifications ---

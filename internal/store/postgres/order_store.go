@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -216,4 +217,24 @@ func (s *OrderStore) ListByMarket(ctx context.Context, marketID string, opts dom
 		return nil, fmt.Errorf("postgres: scan orders by market: %w", err)
 	}
 	return orders, nil
+}
+
+// ListBefore returns all orders created strictly before the given time (for archiving).
+func (s *OrderStore) ListBefore(ctx context.Context, before time.Time) ([]domain.Order, error) {
+	query := `SELECT ` + orderSelectCols + ` FROM orders WHERE created_at < $1 ORDER BY created_at ASC`
+	rows, err := s.pool.Query(ctx, query, before)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: list orders before: %w", err)
+	}
+	defer rows.Close()
+	return scanOrderRows(rows)
+}
+
+// DeleteBefore deletes all orders created before the given time. Returns the number deleted.
+func (s *OrderStore) DeleteBefore(ctx context.Context, before time.Time) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM orders WHERE created_at < $1`, before)
+	if err != nil {
+		return 0, fmt.Errorf("postgres: delete orders before: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }

@@ -322,7 +322,9 @@ func (r *APIOrderResult) ToDomainOrderResult() domain.OrderResult {
 	return result
 }
 
-// ToDomainMarket converts a Gamma APIMarket to a domain.Market.
+// ToDomainMarket converts a Gamma APIMarket to a domain.Market. Safe for event-scraper
+// upserts: defaults Question to "Unknown" and Outcomes to "Yes"/"No" when missing so
+// markets(id) exists before linking in condition_group_markets.
 func (m *APIMarket) ToDomainMarket() domain.Market {
 	dm := domain.Market{
 		ID:          m.ID,
@@ -330,6 +332,10 @@ func (m *APIMarket) ToDomainMarket() domain.Market {
 		Slug:        m.Slug,
 		ConditionID: m.ConditionID,
 		NegRisk:     m.NegRisk,
+		Outcomes:    [2]string{"Yes", "No"},
+	}
+	if dm.Question == "" {
+		dm.Question = "Unknown"
 	}
 
 	// Parse volume
@@ -337,10 +343,10 @@ func (m *APIMarket) ToDomainMarket() domain.Market {
 		dm.Volume = v
 	}
 
-	// Status
+	// Status (support both Active and ActiveFromAPI from Gamma)
 	if m.Closed {
 		dm.Status = domain.MarketStatusClosed
-	} else if m.Active {
+	} else if m.Active || bool(m.ActiveFromAPI) {
 		dm.Status = domain.MarketStatusActive
 	} else {
 		dm.Status = domain.MarketStatusSettled
@@ -352,7 +358,9 @@ func (m *APIMarket) ToDomainMarket() domain.Market {
 			break
 		}
 		dm.TokenIDs[i] = tok.TokenID
-		dm.Outcomes[i] = tok.Outcome
+		if tok.Outcome != "" {
+			dm.Outcomes[i] = tok.Outcome
+		}
 	}
 
 	// Timestamps
